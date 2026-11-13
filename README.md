@@ -2,7 +2,24 @@
 
 Know the risk before you click.
 
-PhishLens is a Chrome extension that will analyze the Gmail message you have open. This branch currently detects that message and shows a panel. It does not read the subject, sender, body, or links, and it does not send anything to Cloudflare yet.
+PhishLens is a Chrome extension that scores the Gmail message you have open. The page is only used to see which message is open and to draw the panel. The message itself comes from the Gmail API. After one disclosure, that message is sent to a Cloudflare Worker, where rules and Workers AI produce a 0–100 score.
+
+## Flow
+
+```mermaid
+flowchart LR
+  gmail[Open Gmail message]
+  content[Content script reads the message id]
+  api[Gmail API returns the message]
+  consent[One-time Cloudflare disclosure]
+  worker[Worker rules plus Workers AI]
+  score[Deterministic 0 to 100 score]
+  panel[Panel in Gmail]
+
+  gmail --> content --> api --> consent --> worker --> score --> panel
+```
+
+Turn Cloudflare AI off and the same message stays on the device. The panel then shows the local heuristic and says that result is less accurate.
 
 ## Install the extension
 
@@ -21,9 +38,9 @@ From `worker/`, after `npx wrangler login`:
 npx wrangler deploy
 ```
 
-Paste the printed `*.workers.dev` URL into `PHISHLENS_WORKER_URL` in `extension/config.js`, reload the extension, and open a message again.
-6. Open a different message. The panel updates to that message id.
-7. Expand more than one message in a thread. The panel asks you to leave only one open.
+Paste the printed `*.workers.dev` URL into `PHISHLENS_WORKER_URL` in `extension/config.js`, reload the extension, and open a message again. The deployed Worker is `https://phishlens.phishlens.workers.dev`.
+
+Open another message and the panel follows that message. Expand more than one message in a thread and PhishLens will not guess.
 
 The extension id is pinned with the public key in `extension/manifest.json`, so it stays stable across reloads:
 
