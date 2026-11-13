@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PhishLens selection fixture</title>
+  <style>
+    body { margin: 24px; background: #f4f6f8; color: #142033; font-family: system-ui, sans-serif; }
+    button { margin-right: 8px; }
+    li.fail { color: #9b2c2c; }
+    li.pass { color: #1f7a3a; }
+  </style>
+</head>
+<body>
+  <h1>PhishLens selection fixture</h1>
+  <p>Checks message-id detection without reading email content.</p>
+  <div>
+    <button id="show-detected" type="button">Show detected</button>
+    <button id="show-ambiguous" type="button">Show ambiguous</button>
+    <button id="show-inbox" type="button">Clear panel</button>
+    <button id="show-next" type="button">Switch message</button>
+  </div>
+  <ul id="report"></ul>
+  <script src="../extension/selection.js"></script>
+  <script src="../extension/ui.js"></script>
+  <script>
+    const report = document.getElementById('report');
+    const results = [];
+
+    function add(tag, attrs, children) {
+      const node = document.createElement(tag);
+      Object.keys(attrs || {}).forEach(function (key) {
+        if (key === 'class') node.className = attrs[key];
+        else if (key === 'text') node.textContent = attrs[key];
+        else node.setAttribute(key, attrs[key]);
+      });
+      (children || []).forEach(function (child) { node.append(child); });
+      return node;
+    }
+
+    function check(name, pass) {
+      results.push({ name: name, pass: pass });
+      const item = document.createElement('li');
+      item.className = pass ? 'pass' : 'fail';
+      item.textContent = (pass ? 'PASS ' : 'FAIL ') + name;
+      report.append(item);
+    }
+
+    function selection(root) {
+      return PhishLensSelection.findSelection(root);
+    }
+
+    const inbox = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('table', {}, [
+          add('tr', { class: 'zA', 'data-legacy-thread-id': 'thread-list' }, [
+            add('td', { text: 'Quarterly budget from ceo@example.com' })
+          ])
+        ])
+      ])
+    ]);
+    check('inbox list is not an open message', selection(inbox).status === 'none');
+
+    const hashOnly = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { text: '#inbox/FMfcgzQxShouldNotBeAnId' })
+      ])
+    ]);
+    check('url hash text is not a message id', selection(hashOnly).status === 'none');
+
+    const oneExpanded = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { 'data-legacy-thread-id': 'thread-hex' }, [
+          add('h2', { text: 'Quarterly budget' }),
+          add('div', { class: 'adn', 'data-legacy-message-id': 'aaa111', 'data-message-id': '#msg-f:1' }, [
+            add('span', { email: 'ceo@example.com', text: 'Alex' }),
+            add('a', { href: 'http://cyber.rit.sk.com' }, [document.createTextNode('portal')])
+          ]),
+          add('div', { class: 'adn ads', 'data-legacy-message-id': 'bbb222', 'data-message-id': '#msg-f:2' })
+        ])
+      ])
+    ]);
+    const expandedResult = selection(oneExpanded);
+    check('expanded message is selected', expandedResult.status === 'detected' && expandedResult.legacyMessageId === 'bbb222');
+    check('thread id comes from the conversation', expandedResult.threadId === 'thread-hex');
+    const expandedJson = JSON.stringify(expandedResult);
+    check('subject is not extracted', expandedJson.indexOf('Quarterly') === -1);
+    check('sender is not extracted', expandedJson.indexOf('ceo@example.com') === -1);
+    check('link is not extracted', expandedJson.indexOf('sk.com') === -1);
+
+    const single = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { class: 'adn', 'data-legacy-message-id': 'only123', 'data-legacy-thread-id': 'solo' })
+      ])
+    ]);
+    const singleResult = selection(single);
+    check('a lone message is selected', singleResult.status === 'detected' && singleResult.legacyMessageId === 'only123' && singleResult.threadId === 'solo');
+
+    const many = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { class: 'adn ads', 'data-legacy-message-id': 'one' }),
+        add('div', { class: 'adn ads', 'data-legacy-message-id': 'two' })
+      ])
+    ]);
+    const manyResult = selection(many);
+    check('two expanded messages stay unresolved', manyResult.status === 'ambiguous' && manyResult.expandedCount === 2);
+
+    const collapsedThread = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { class: 'adn', 'data-legacy-message-id': 'old' }),
+        add('div', { class: 'adn', 'data-legacy-message-id': 'newer' })
+      ])
+    ]);
+    check('collapsed thread is not guessed', selection(collapsedThread).status === 'ambiguous');
+
+    const duplicate = add('div', {}, [
+      add('div', { role: 'main' }, [
+        add('div', { class: 'adn ads', 'data-legacy-message-id': 'same' }, [
+          add('div', { 'data-legacy-message-id': 'same' })
+        ])
+      ])
+    ]);
+    check('duplicate ids count once', selection(duplicate).status === 'detected');
+
+    const failed = results.filter(function (item) { return !item.pass; });
+    const summary = document.createElement('p');
+    summary.id = 'summary';
+    summary.textContent = failed.length === 0
+      ? 'All ' + results.length + ' selection checks passed.'
+      : failed.length + ' selection checks failed.';
+    document.body.append(summary);
+
+    let cssText = '';
+    fetch('../extension/styles.css').then(function (response) {
+      return response.text();
+    }).then(function (text) {
+      cssText = text;
+      showDetected();
+    });
+
+    function showDetected() {
+      PhishLensPanel.render(document, {
+        status: 'detected',
+        legacyMessageId: 'bbb222',
+        threadId: 'thread-hex'
+      }, {
+        cssText: cssText,
+        onClose: function () { PhishLensPanel.clear(document); }
+      });
+    }
+
+    document.getElementById('show-detected').addEventListener('click', showDetected);
+    document.getElementById('show-ambiguous').addEventListener('click', function () {
+      PhishLensPanel.render(document, { status: 'ambiguous' }, {
+        cssText: cssText,
+        onClose: function () { PhishLensPanel.clear(document); }
+      });
+    });
+    document.getElementById('show-inbox').addEventListener('click', function () {
+      PhishLensPanel.clear(document);
+    });
+    document.getElementById('show-next').addEventListener('click', function () {
+      PhishLensPanel.render(document, {
+        status: 'detected',
+        legacyMessageId: 'ccc333',
+        threadId: 'thread-hex'
+      }, {
+        cssText: cssText,
+        onClose: function () { PhishLensPanel.clear(document); }
+      });
+    });
+  </script>
+</body>
+</html>
