@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PhishLens",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Know the risk before you click.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApNzUo8u7x7GrjrYqJ5yXyJNfdPNyqh2WiXO0K+rWUMO8aXskQMHa/NkDGh5tIrDJNs1dqwZlGjfJK6nstS2IrQ0+c0En+Vl+OYTu1YuwUiXwzqjxOHEe67KcqZfEV/ruxG/SF0yNPJSsooHWw9rAKkZMKzwSPw4YtevcX68mntzmui5fEzzzV2D68Ym0YDafC72HsQUGI2IYfgJX+ZhtnHbRDeazuqttghRQn7X9oDBEGf6YBPUzEw9oYaYM8SsT9QouVpSxotKfdTcSEu9Iz0oQYYeGebr/W8J41BPz8MDXBrd3yLpKEe2QXcWxuMo0EuQwrYvSSFHIvjun5ei5iQIDAQAB",
   "icons": {
@@ -17,8 +17,14 @@
       "128": "icons/icon128.png"
     }
   },
+  "permissions": ["identity", "storage"],
+  "oauth2": {
+    "client_id": "628799736719-6u1bv4trp10mcm0e96ruoinrqdk892dt.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
+  },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -27,5 +33,9 @@
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["https://mail.google.com/*"]
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://www.googleapis.com/*",
+    "https://*.workers.dev/*"
+  ]
 }

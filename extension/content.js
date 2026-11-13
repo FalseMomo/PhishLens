@@ -8,6 +8,28 @@
   let timer = null;
   let lastKey = null;
   let dismissedKey = null;
+  let activeId = null;
+
+  function panelOptions(key) {
+    return {
+      onClose: function () {
+        dismissedKey = key;
+        PhishLensPanel.clear(document);
+      },
+      onReconnect: function () {
+        chrome.runtime.sendMessage({ type: 'PHISHLENS_RECONNECT' }).catch(function () {});
+        PhishLensPanel.render(document, { status: 'loading', legacyMessageId: activeId }, panelOptions(key));
+      },
+      onConsent: function () {
+        chrome.runtime.sendMessage({ type: 'PHISHLENS_CONSENT' }).catch(function () {});
+        PhishLensPanel.render(document, { status: 'analyzing', legacyMessageId: activeId }, panelOptions(key));
+      },
+      onToggleCloud: function (enabled) {
+        chrome.runtime.sendMessage({ type: 'PHISHLENS_SET_CLOUD', cloudAi: enabled }).catch(function () {});
+        PhishLensPanel.render(document, { status: 'analyzing', legacyMessageId: activeId }, panelOptions(key));
+      }
+    };
+  }
 
   function selectionKey(selection) {
     if (!selection || selection.status === 'none') return 'none';
@@ -43,14 +65,21 @@
     }
     if (key === lastKey) return;
     lastKey = key;
-    PhishLensPanel.render(document, selection, {
-      onClose: function () {
-        dismissedKey = key;
-        PhishLensPanel.clear(document);
-      }
-    });
+    activeId = selection.status === 'detected' ? selection.legacyMessageId : null;
+    const view = selection.status === 'detected'
+      ? { status: 'loading', legacyMessageId: selection.legacyMessageId, threadId: selection.threadId }
+      : selection;
+    PhishLensPanel.render(document, view, panelOptions(key));
     notify(selection);
   }
+
+  chrome.runtime.onMessage.addListener(function (message) {
+    if (!message || message.type !== 'PHISHLENS_RESULT' || !message.result) return;
+    if (!activeId || message.result.legacyMessageId !== activeId) return;
+    const key = 'detected:' + activeId;
+    if (dismissedKey === key) return;
+    PhishLensPanel.render(document, message.result, panelOptions(key));
+  });
 
   function scan() {
     apply(PhishLensSelection.findSelection(document));
