@@ -137,18 +137,21 @@
       (selection.findings || []).slice(0, 3).forEach(function (item) {
         panel.append(element(doc, 'p', 'finding', item.title));
       });
-      if (selection.warning) panel.append(element(doc, 'p', 'warning', selection.warning));
       const more = element(doc, 'button', 'action', 'Read more');
       more.type = 'button';
       const details = element(doc, 'div', 'details');
       details.hidden = true;
+      if (selection.warning) details.append(element(doc, 'p', 'warning', selection.warning));
+      if (!(selection.findings || []).length) {
+        details.append(element(doc, 'p', 'finding', 'The score is 0 because no rule matched. The check looked for a suspicious or misleading link, a credential or payment request, and a failed SPF, DKIM, or DMARC result. None of those were present. Urgency alone cannot raise the score. This is not a guarantee the message is safe.'));
+      }
       const meta = element(doc, 'dl', 'meta');
       field(doc, meta, 'From', selection.from);
       field(doc, meta, 'Subject', selection.subject);
       field(doc, meta, 'SPF', selection.spf);
       field(doc, meta, 'DKIM', selection.dkim);
       field(doc, meta, 'DMARC', selection.dmarc);
-      field(doc, meta, 'Source', selection.analysisMethod === 'workers_ai' ? 'Cloudflare Workers AI' : 'Local heuristic');
+      field(doc, meta, 'Source', selection.analysisMethod === 'workers_ai' ? 'Cloudflare Workers AI' : selection.analysisMethod === 'rules_ai_unavailable' ? 'Cloudflare rules' : 'Local heuristic');
       details.append(meta);
       (selection.findings || []).forEach(function (item) {
         const line = element(doc, 'p', 'finding', item.title);
@@ -160,10 +163,12 @@
         details.hidden = !details.hidden;
         more.textContent = details.hidden ? 'Read more' : 'Show less';
       });
-      const toggle = element(doc, 'button', 'close', selection.cloudOn ? 'Turn AI off' : 'Turn AI on');
+      const toggleLabel = selection.unreachable ? 'Retry Cloudflare' : selection.cloudOn ? 'Turn AI off' : 'Turn AI on';
+      const toggle = element(doc, 'button', 'close', toggleLabel);
       toggle.type = 'button';
       toggle.addEventListener('click', function () {
-        if (options && options.onToggleCloud) options.onToggleCloud(!selection.cloudOn);
+        if (selection.unreachable && options && options.onRetry) options.onRetry();
+        else if (options && options.onToggleCloud) options.onToggleCloud(!selection.cloudOn);
       });
       panel.append(more, details, toggle);
     } else if (selection.status === 'ready') {

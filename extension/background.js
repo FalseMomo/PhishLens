@@ -23,7 +23,7 @@ function authFields(message) {
   };
 }
 
-function localReport(message, warning) {
+function localReport(message, warning, cloudOn) {
   const result = assess(message);
   return Object.assign({
     status: 'report',
@@ -31,8 +31,9 @@ function localReport(message, warning) {
     from: message.sender.email || 'Unknown sender',
     subject: message.subject || '(no subject)',
     analysisMethod: 'local_heuristic',
-    cloudOn: false,
-    warning: warning || 'Cloudflare AI is off. This local heuristic can miss phishing and can flag legitimate mail.'
+    cloudOn: Boolean(cloudOn),
+    unreachable: Boolean(cloudOn),
+    warning: warning || 'Cloudflare AI is off. This score is from the on-device heuristic, which can miss phishing and can flag legitimate mail.'
   }, authFields(message), result);
 }
 
@@ -76,7 +77,7 @@ async function publish(message, seq, tabId) {
     const warning = PHISHLENS_WORKER_URL
       ? ''
       : 'The Cloudflare Worker URL is not set yet, so this is the local heuristic.';
-    send(tabId, localReport(message, warning));
+    send(tabId, localReport(message, warning, !prefs.cloudAi ? false : true));
     return;
   }
   send(tabId, { status: 'analyzing', legacyMessageId: message.messageId });
@@ -101,7 +102,7 @@ async function publish(message, seq, tabId) {
     send(tabId, cloudReport(message, payload));
   } catch (error) {
     if (seq !== requestSeq) return;
-    send(tabId, localReport(message, 'Cloudflare could not be reached. Showing the local heuristic, which is less accurate.'));
+    send(tabId, localReport(message, 'Cloudflare AI is still on, but ' + PHISHLENS_WORKER_URL + ' could not be reached. The new workers.dev certificate may still be propagating, so Workers AI did not see this message.', true));
   }
 }
 

@@ -27,6 +27,10 @@
       onToggleCloud: function (enabled) {
         chrome.runtime.sendMessage({ type: 'PHISHLENS_SET_CLOUD', cloudAi: enabled }).catch(function () {});
         PhishLensPanel.render(document, { status: 'analyzing', legacyMessageId: activeId }, panelOptions(key));
+      },
+      onRetry: function () {
+        chrome.runtime.sendMessage({ type: 'PHISHLENS_SET_CLOUD', cloudAi: true }).catch(function () {});
+        PhishLensPanel.render(document, { status: 'analyzing', legacyMessageId: activeId }, panelOptions(key));
       }
     };
   }
